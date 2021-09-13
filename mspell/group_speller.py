@@ -22,7 +22,7 @@ class GroupSpeller:
     pitch-class. If this is not true, raises a ValueError.
 
     Keyword args:
-        tet: sets temperament.
+        tet: sets temperament. Default: 12.
 
     Methods:
         __call__: takes a sequence of ints, returns an np array of strings
@@ -31,36 +31,34 @@ class GroupSpeller:
         ValueError if gcd(tet, fifth) is not 1.
     """
 
-    # keys: temperament cardinalities
-    # values: tuples of form (fifth, zero_pc)
-    tet_dict = {
-        12: (7, 2),
-        19: (11, 3),
-        31: (18, 5),
-    }
+    def __init__(
+        self,
+        tet: int = 12,
+        pitches: bool = False,
+        letter_format: str = "shell",
+    ):
+        self._tet = tet
+        self._pitches = pitches
+        self._letter_format = letter_format
+        self.fifth = utils.approximate_just_interval(3 / 2, tet)
+        if math.gcd(tet, self.fifth) != 1:
+            raise ValueError
+        self._spelling_dict = self._build_fifth_class_spelling_dict()
+        # Because of the modulo operation, it's hard to write an inverse
+        # function that goes from pitch-class to fifth-class in an arbitrary
+        # temperament, so instead we calculate the pitch-classes from the
+        # fifth-classes and cache them:
+        self._pc_to_fc_dict = {
+            (i + 2) * self.fifth % self._tet: i for i in range(self._tet)
+        }
 
-    def __init__(self, tet: int = 12):
-        self.tet = tet
-        if tet in self.tet_dict:
-            self.fifth, self.zero_pc = self.tet_dict[tet]
-        else:
-            self.fifth = utils.approximate_just_interval(3 / 2, tet)
-            if math.gcd(tet, self.fifth) != 1:
-                raise ValueError
-            self.zero_pc = 2 * self.fifth % self.tet
-        self._shell_dict = self.build_fifth_class_spelling_dict()
-        self._kern_dict = self.build_fifth_class_spelling_dict(
-            letter_format="kern"
-        )
-
-    @staticmethod
-    def build_fifth_class_spelling_dict(
+    def _build_fifth_class_spelling_dict(
+        self,
         bounds: tuple[int, int] = (-28, 28),
         forward: bool = True,
-        letter_format: str = "shell",
-    ) -> dict:
-        flat_sign = "b" if letter_format == "shell" else "-"
-        alphabet = "DAEBFCG" if letter_format == "shell" else "daebfcg"
+    ) -> dict[int, str]:
+        flat_sign = "b" if self._letter_format == "shell" else "-"
+        alphabet = "DAEBFCG" if self._letter_format == "shell" else "daebfcg"
         len_alphabet = 7
         out = {}
         for fc in range(bounds[0], bounds[1] + 1):
@@ -74,56 +72,46 @@ class GroupSpeller:
                 out[letter + accidental] = fc
         return out
 
-    def _pc_to_fc(self, pc: int) -> int:
-        # return (pc - self.ref_pc) * self.fifth % self.tet - self.half_tet
-        return (pc - self.zero_pc) * self.fifth % self.tet
-
-    def __call__(
-        self, pcs: Sequence[int], letter_format: str = "shell"
-    ) -> list[str]:
+    def __call__(self, pcs: Sequence[int]) -> list[str]:
         """
         Args:
             pcs: sequence of ints.
-
-        Keyword args:
-            letter_format: either "shell" (C#, Bb, ...) or "kern" (c#, b-, ...)
         """
         if len(pcs) == 0:
             return []
         unique_pcs, inv_indices = np.unique(pcs, return_inverse=True)
-        fcs = self._pc_to_fc(unique_pcs)
+        fcs = np.fromiter(
+            (self._pc_to_fc_dict[pc % self._tet] for pc in unique_pcs),
+            dtype=unique_pcs.dtype,
+        )
         indices = np.argsort(fcs)
         lower_bound = None
         span = fcs[indices[-1]] - fcs[indices[0]]
         if span > 6:
             for i, j in zip(indices, indices[1:]):
-                newspan = (fcs[i] + self.tet) - fcs[j]
+                newspan = (fcs[i] + self._tet) - fcs[j]
                 if newspan < span:
                     lower_bound = fcs[j]
                     span = newspan
             if lower_bound is not None:
                 fcs = np.array(
-                    [fc + self.tet if fc < lower_bound else fc for fc in fcs]
+                    [fc + self._tet if fc < lower_bound else fc for fc in fcs]
                 )
         fcs_sum = fcs.sum()
         while True:
-            flat_fcs = fcs - self.tet
+            flat_fcs = fcs - self._tet
             flat_sum = abs(flat_fcs.sum())
             if flat_sum < fcs_sum:
                 fcs = flat_fcs
                 fcs_sum = flat_sum
             else:
                 break
-        if letter_format == "shell":
-            spellings = [self._shell_dict[fc] for fc in fcs]
-        else:
-            spellings = [self._kern_dict[fc] for fc in fcs]
+        spellings = [self._spelling_dict[fc] for fc in fcs]
         return list(np.array(spellings)[inv_indices])
 
     def pitches(
         self,
         pitches: Sequence[Optional[int]],
-        letter_format: str = "shell",
         rests: Optional[str] = None,
     ) -> list[str]:
         """Takes a sequence of ints, returns a list array of spelled strings.
@@ -133,14 +121,12 @@ class GroupSpeller:
                 passed).
 
         Keyword args:
-            letter_format: either "shell" (C#4, Bb2, ...)
-                or "kern" (cc#, B-, ...)
             rests: if passed, then any items in `pitches` with the value of
                 `None` will be replaced with this value.
         """
 
         def _kern_octave(pitch, letter):
-            octave = pitch // self.tet - 5
+            octave = pitch // self._tet - 5
             if octave >= 0:
                 return letter * (octave + 1)
             return letter.upper() * (-octave)
@@ -153,20 +139,20 @@ class GroupSpeller:
             for i in reversed(rest_indices):
                 pitches.pop(i)
 
-        pcs = self(pitches, letter_format=letter_format)
+        pcs = self(pitches)
 
         # The next three lines (and the subtraction of alterations below) ensure
         # that Cb or B# (or even Dbbb, etc.) appear in the correct octave. It
         # feels a little hacky, but it works.
         sharp_sign = "#"
-        flat_sign = "b" if letter_format == "shell" else "-"
+        flat_sign = "b" if self._letter_format == "shell" else "-"
         alterations = [
             0 + pc.count(sharp_sign) - pc.count(flat_sign) for pc in pcs
         ]
 
-        if letter_format == "shell":
+        if self._letter_format == "shell":
             out = [
-                pc + str((pitch - alteration) // self.tet - 1)
+                pc + str((pitch - alteration) // self._tet - 1)
                 for (pitch, pc, alteration) in zip(pitches, pcs, alterations)
             ]
         else:

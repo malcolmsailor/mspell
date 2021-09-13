@@ -49,7 +49,7 @@ class Unspeller(SpellBase):
     def _unspell_shell(self, item, pitches):
         i = 0
         try:
-            while not item[i].isdigit():
+            while not item[i].isdigit() and not item[i] == "-":
                 i += 1
         except IndexError:
             if pitches:

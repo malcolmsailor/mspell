@@ -2,10 +2,7 @@ import math
 from numbers import Number
 from typing import Optional
 
-# TODO tuning
 from . import utils
-
-from .utils import get_accidental
 
 
 class SpellBase:
@@ -68,7 +65,7 @@ class SpellBase:
             pitch_class = (counter * fifth) % tet
 
             accidental_n = math.floor((3 + counter) / len(cls._alphabet))
-            accidental = get_accidental(accidental_n, flat_sign=flat_sign)
+            accidental = utils.get_accidental(accidental_n, flat_sign=flat_sign)
 
             letter = cls._alphabet[(3 + counter) % len(cls._alphabet)]
 
