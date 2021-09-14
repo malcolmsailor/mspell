@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 
 import math
@@ -54,9 +54,9 @@ class GroupSpeller:
 
     def _build_fifth_class_spelling_dict(
         self,
-        bounds: tuple[int, int] = (-28, 28),
+        bounds: Tuple[int, int] = (-28, 28),
         forward: bool = True,
-    ) -> dict[int, str]:
+    ) -> Dict[int, str]:
         flat_sign = "b" if self._letter_format == "shell" else "-"
         alphabet = "DAEBFCG" if self._letter_format == "shell" else "daebfcg"
         len_alphabet = 7
@@ -72,7 +72,7 @@ class GroupSpeller:
                 out[letter + accidental] = fc
         return out
 
-    def __call__(self, pcs: Sequence[int]) -> list[str]:
+    def __call__(self, pcs: Sequence[int]) -> List[str]:
         """
         Args:
             pcs: sequence of ints.
@@ -113,7 +113,7 @@ class GroupSpeller:
         self,
         pitches: Sequence[Optional[int]],
         rests: Optional[str] = None,
-    ) -> list[str]:
+    ) -> List[str]:
         """Takes a sequence of ints, returns a list array of spelled strings.
 
         Args:
