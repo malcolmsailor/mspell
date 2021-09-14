@@ -18,15 +18,15 @@ numpy
 
 ```
 >>> import mspell
->>> speller = mspell.Speller(12)
+>>> speller = mspell.Speller()
 >>> speller(6)
 'F#'
 >>> speller([3,6,10])
 ['Eb', 'F#', 'Bb']
->>> groupspeller = mspell.GroupSpeller(12)
+>>> groupspeller = mspell.GroupSpeller()
 >>> groupspeller([3,6,10])
 ['Eb', 'Gb', 'Bb']
->>> unspeller = mspell.Unspeller(31)
+>>> unspeller = mspell.Unspeller(tet=31)
 >>> unspeller([['Eb', 'Gb', 'Bb'], ['Eb', 'F#', 'Bb']])
 [[8, 16, 26], [8, 15, 26]]
 ```

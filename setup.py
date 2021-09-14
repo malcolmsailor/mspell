@@ -7,7 +7,7 @@ with open(README, "r", encoding="utf-8") as fh:
 
 setup(
     name="mspell",
-    version="0.0.0",
+    version="0.0.1",
     author="Malcolm Sailor",
     author_email="malcolm.sailor@gmail.com",
     description="Spell musical pitches",
