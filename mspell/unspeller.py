@@ -31,7 +31,9 @@ class Unspeller(SpellBase):
         unspelled(item, pitches=None)
     """
 
-    def __init__(self, tet=12, pitches=False, letter_format="shell"):
+    def __init__(
+        self, tet=12, pitches=False, rests=True, letter_format="shell"
+    ):
         self._tet = tet
         self._pitches = pitches
         if letter_format not in ("shell", "kern"):
@@ -39,6 +41,11 @@ class Unspeller(SpellBase):
                 f"letter_format {letter_format} not in ('shell', 'kern')"
             )
         self._pc_dict = self._get_spell_dict(tet, letter_format, forward=False)
+        if rests:
+            if letter_format == "kern":
+                self._pc_dict["r"] = None
+            else:
+                self._pc_dict["Rest"] = None
         # self._pc_dict = spell.speller.build_spelling_dict(
         #     tet, forward=False, letter_format=letter_format)
         if letter_format == "shell":
@@ -82,7 +89,7 @@ class Unspeller(SpellBase):
     def __call__(self, item, pitches=None):
         return self.unspelled(item, pitches=pitches)
 
-    @utils.nested_method
+    @utils.nested_method()
     def unspelled(self, item, pitches=None):
         """Takes spelled pitch strings, returns integers.
 

@@ -1,3 +1,4 @@
+from numbers import Number
 from typing import Optional, Sequence, Union
 
 import numpy as np
@@ -25,7 +26,8 @@ class Speller(SpellBase):
             60 = "C4"; note the octave number). If false, spells pitch-classes
             by default (e.g., in 12-tet, 60 = "C").
             Default: False.
-        rests: boolean. If true, spells None as "Rest". If false, raises a
+        rests: boolean. If true, spells None as "Rest" (if letter_format is
+            "shell") or "r" (if letter_format is "kern"). If false, raises a
             TypeError on None values.
         letter_format: string.
             Possible values:
@@ -53,8 +55,10 @@ class Speller(SpellBase):
         self._rests = rests
         if letter_format == "shell":
             self._pitch = self._shell_pitch
+            self._rest_str = "Rest"
         elif letter_format == "kern":
             self._pitch = self._kern_pitch
+            self._rest_str = "r"
         else:
             raise ValueError(
                 f"letter_format {letter_format} not in ('shell', 'kern')"
@@ -85,7 +89,7 @@ class Speller(SpellBase):
 
         return pc_string
 
-    @utils.nested_method
+    @utils.nested_method(coerce_to_list=True)
     def __call__(
         self, item: Union[int, Sequence], pitches: Optional[bool] = None
     ) -> Union[str, Sequence[str]]:
@@ -94,7 +98,8 @@ class Speller(SpellBase):
         Args:
             item: either an integer, or an (arbitrarily deep and nested)
                 list-like of integers (and None values, if Speller was
-                initialized with rests=True).
+                initialized with rests=True). If non-integer numbers are
+                passed, they will be cast to ints with int().
 
         Keyword args:
             pitches: boolean. Overrides the default setting for
@@ -109,32 +114,49 @@ class Speller(SpellBase):
                 nesting as item.
 
         Raises:
-            TypeError if iter() fails on item and item is not an integer (or
+            TypeError if iter() fails on item and item is not a number (or
                 None, if Speller was initialized with rests=True.)
         """
         if pitches is None:
             pitches = self._pitches
 
-        if not isinstance(item, (int, np.integer)):
+        if not isinstance(item, Number):
             if item is not None and self._rests:
                 raise TypeError(
-                    "Speller.spelled_list() can only take iterables of "
+                    "Speller() can only take iterables of "
                     "integers, or None for rests"
                 )
-            else:
+            elif not self._rests:
                 raise TypeError(
-                    "Speller.spelled_list() with rests=False can only take "
+                    "Speller() with rests=False can only take "
                     "iterables of integers"
                 )
 
         if item is None:
-            return "Rest"
+            return self._rest_str
 
         if item < 0:
             return item
+
+        if not isinstance(item, int):
+            item = int(item)
 
         pitch_class = self._spelling_dict[item % self._tet]
         if not pitches:
             return pitch_class
 
         return self._pitch(pitch_class, item)
+
+    # Not sure if or why this function would be needed
+    # def spelled_string(self, item, pitches=None):
+    #     if isinstance(item, typing.Sequence) and not isinstance(item, str):
+    #         flat = list(flatten(item))
+    #         if any([isinstance(f, str) for f in flat]):
+    #             if not all([isinstance(f, str) for f in flat]):
+    #                 raise TypeError
+    #             return " ".join(flat)
+    #         return " ".join(self.spelled_list(flat, pitches=pitches))
+
+    #     if isinstance(item, str):
+    #         return item
+    #     return self.spelled_list(item, pitches=pitches)
