@@ -4,20 +4,21 @@ from typing import Optional, Sequence, Union
 import numpy as np
 
 
-from .spell_base import SpellBase
+from .spell_base import SingleSpellBase
 from . import utils
 
 
 ALPHABET = "fcgdaeb"
 
 
-class Speller(SpellBase):
+class Speller(SingleSpellBase):
     """Spells pitches or pitch-classes in specified temperament.
 
-    When spelling pitches, C4 is always 5 * c, where c is the cardinality of the
-    temperament. So in 12-tet, C4 = 60; in 31-tet, C4 = 155, and so on.
+    When spelling pitches, C4 is always 5 * t, where t is the cardinality of the
+    temperament. So in 12-tet, C4 = 5 * 12 = 60; in 31-tet, C4 = 5 * 31 = 155,
+    and so on.
 
-    Double-sharps and flats (and beyond) are always indicated by repetition of
+    Double-sharps and flats (and bselselfeyond) are always indicated by repetition of
     the accidental symbol (e.g., F##).
 
     Keyword args:
@@ -53,6 +54,7 @@ class Speller(SpellBase):
         self._tet = tet
         self._pitches = pitches
         self._rests = rests
+        self._letter_format = letter_format
         if letter_format == "shell":
             self._pitch = self._shell_pitch
             self._rest_str = "Rest"
@@ -63,29 +65,26 @@ class Speller(SpellBase):
             raise ValueError(
                 f"letter_format {letter_format} not in ('shell', 'kern')"
             )
-        self._spelling_dict = self._get_spell_dict(
-            tet, letter_format, forward=True
-        )
 
     def _shell_pitch(self, pc_string: str, pitch_num: int) -> str:
         """Appends an octave number to a pitch-class (e.g., "C#" becomes "C#3")"""
-        octave = pitch_num // self._tet - 1
+        octave = pitch_num // self.tet - 1 + self.octave_offsets[pitch_num % self.tet]
         return pc_string + str(octave)
 
     def _kern_pitch(self, pc_string: str, pitch_num: int) -> str:
         if pc_string[0] == "c" and pc_string[-1] == "-":
-            pitch_num += self._tet
-        temp_num = (pitch_num % self._tet) + (self._tet * 5)
+            pitch_num += self.tet
+        temp_num = (pitch_num % self.tet) + (self.tet * 5)
 
         if temp_num > pitch_num:
             pc_string = pc_string[0].upper() + pc_string[1:]
-            temp_num -= self._tet
+            temp_num -= self.tet
         while temp_num > pitch_num:
             pc_string = pc_string[0] + pc_string
-            temp_num -= self._tet
+            temp_num -= self.tet
         while temp_num < pitch_num:
             pc_string = pc_string[0] + pc_string
-            temp_num += self._tet
+            temp_num += self.tet
 
         return pc_string
 
@@ -141,7 +140,7 @@ class Speller(SpellBase):
         if not isinstance(item, int):
             item = int(item)
 
-        pitch_class = self._spelling_dict[item % self._tet]
+        pitch_class = self.spell_dict[item % self.tet]
         if not pitches:
             return pitch_class
 

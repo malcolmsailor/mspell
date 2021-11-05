@@ -57,6 +57,24 @@ def test_speller():
         assert shell_unspeller(shell_spelled) == pc
         assert kern_unspeller(kern_spelled) == pc
 
+    shell_speller = mspell.Speller(pitches=True, rests=True)
+    shell_unspeller = mspell.Unspeller(pitches=True, rests=True)
+    kern_speller = mspell.Speller(
+        pitches=True, letter_format="kern", rests=True
+    )
+    kern_unspeller = mspell.Unspeller(
+        pitches=True, letter_format="kern", rests=True
+    )
+    test_pitches = [
+        ("Cb4", "c-", 59),
+        ("Dbbb4", "d---", 59),
+        ("B#3", "B#", 60),
+        ("A###3", "A###", 60),
+    ]
+
+    for shell_spelled, kern_spelled, pitch in test_pitches:
+        assert shell_unspeller(shell_spelled) == pitch
+        assert kern_unspeller(kern_spelled) == pitch
 
 if __name__ == "__main__":
     test_speller()

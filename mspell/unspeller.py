@@ -1,8 +1,10 @@
-from .spell_base import SpellBase
+import functools
+
+from .spell_base import SingleSpellBase
 from . import utils
 
 
-class Unspeller(SpellBase):
+class Unspeller(SingleSpellBase):
     """Takes spelled pitches or pitch-classes and returns pitch numbers.
 
     When spelling pitches, C4 is always 5 * c, where c is the cardinality of
@@ -36,55 +38,70 @@ class Unspeller(SpellBase):
     ):
         self._tet = tet
         self._pitches = pitches
+        self._letter_format = letter_format
         if letter_format not in ("shell", "kern"):
             raise ValueError(
                 f"letter_format {letter_format} not in ('shell', 'kern')"
             )
-        self._pc_dict = self._get_spell_dict(tet, letter_format, forward=False)
-        if rests:
-            if letter_format == "kern":
-                self._pc_dict["r"] = None
-            else:
-                self._pc_dict["Rest"] = None
-        # self._pc_dict = spell.speller.build_spelling_dict(
-        #     tet, forward=False, letter_format=letter_format)
+        # self._get_letters_and_m2(tet, letter_format)
+        # self._pc_dict = self._get_spell_dict(tet, letter_format, forward=False)
+        self._rests = rests
         if letter_format == "shell":
             self._unspell = self._unspell_shell
         elif letter_format == "kern":
             self._unspell = self._unspell_kern
 
+
+
     def _unspell_shell(self, item, pitches):
-        i = 0
-        try:
-            while not item[i].isdigit() and not item[i] == "-":
-                i += 1
-        except IndexError:
-            if pitches:
-                raise ValueError(f"{item} is not a pitch")
-        pc = self._pc_dict[item[:i]]
+        if self._rests and item == "Rest":
+            return None
+        letter_pc = self.letter_dict[
+            item[0].lower() if self.letter_format == "kern" else item[0].upper()
+        ]
+        alteration = 0
+        for i in range(1, len(item)):
+            # we check for "-" on the chance there may be negative octave numbers
+            if item[i].isdigit() or item[i] == "-":
+                break
+            if item[i] == "#":
+                alteration += self.m2
+            elif item[i] == "b":
+                alteration -= self.m2
+            else:
+                raise ValueError(f"Invalid character {item[i]} in note {item}")
         if not pitches:
-            return pc
-        return (int(item[i:]) + 1) * self._tet + pc
+            return (letter_pc + alteration) % self.tet
+        octave = (int(item[i:]) + 1) * self.tet
+        return octave + letter_pc + alteration
 
     def _unspell_kern(self, item, pitches):
+        if self._rests and item == "r":
+            return None
         letter = item[0]
         if letter.isupper():
-            octave = 4
+            octave_num = 4
             increment = -1
         else:
-            octave = 5
+            octave_num = 5
             increment = 1
         i = 1
         while i < len(item) and item[i] == letter:
-            octave += increment
+            octave_num += increment
             i += 1
-        pc_string = item[i - 1 :].lower()
-        pc = self._pc_dict[pc_string]
+        letter_pc = self.letter_dict[item[0].lower()]
+        alteration = 0
+        for j in range(i, len(item)):
+            if item[i] == "#":
+                alteration += self.m2
+            elif item[i] == "-":
+                alteration -= self.m2
+            else:
+                raise ValueError(f"Invalid character {item[i]} in note {item}")
         if not pitches:
-            return pc
-        if pc_string.startswith("c-"):
-            octave -= 1
-        return octave * self._tet + pc
+            return (letter_pc + alteration) % self.tet
+        octave = octave_num * self.tet
+        return octave + letter_pc + alteration
 
     def __call__(self, item, pitches=None):
         return self.unspelled(item, pitches=pitches)

@@ -1,99 +1,84 @@
+import functools
+import itertools
 import math
 from numbers import Number
 from typing import Optional
 
 from . import utils
 
-
 class SpellBase:
-    _alphabet = "fcgdaeb"
-    _itos = {}
-    _stoi = {}
+    @property
+    def tet(self): # pylint: disable=missing-docstring
+        return self._tet
+    
+    @property
+    def letter_format(self): # pylint: disable=missing-docstring
+        return self._letter_format
 
-    @staticmethod
-    def _get_fifth(tet: int, fifth: int) -> int:
-        if fifth is None:
-            tempered_fifth = utils.approximate_just_interval(3 / 2, tet)
-        if math.gcd(tet, tempered_fifth) != 1:
+    @functools.cached_property
+    def flat_sign(self):
+        return "-" if self.letter_format == "kern" else "b"
+
+    @functools.cached_property
+    def fifth(self):
+        tempered_fifth = utils.approximate_just_interval(3 / 2, self.tet)
+        if math.gcd(self.tet, tempered_fifth) != 1:
             raise ValueError
         return tempered_fifth
 
-    @classmethod
-    def _init_missing_dicts(
-        cls, letter_format: str, forward: bool, fifth: Number
-    ) -> dict:
-        if forward:
-            base_dict = cls._itos
-        else:
-            base_dict = cls._stoi
-        if letter_format not in base_dict:
-            base_dict[letter_format] = {}
-        if fifth not in base_dict[letter_format]:
-            base_dict[letter_format][fifth] = {}
-        return base_dict[letter_format][fifth]
+    @functools.cached_property
+    def alphabet(self):
+        if self.letter_format == "kern":
+            return self._alphabet
+        return self._alphabet.upper()
 
-    @classmethod
-    def _get_spell_dict(
-        cls,
-        tet: int,
-        letter_format: str,
-        forward: bool,
-        fifth: Optional[int] = None,
-    ):
-        # TODO move docstring to appropriate place
-        fifth = cls._get_fifth(tet, fifth)
-        spell_dict = cls._init_missing_dicts(letter_format, forward, fifth)
-        if tet in spell_dict:
-            return spell_dict[tet]
+class SingleSpellBase(SpellBase):
+    _alphabet = "fcgdaeb"
 
-        unnormalized_dict = {}
+    @functools.cached_property
+    def m2(self):
+        return (7 * self.fifth) % self.tet
 
-        counter = 0
-
-        flat_sign = "b" if letter_format == "shell" else "-"
-        accidental_n = 0
-        # In very small temperaments (e.g., "1-tet") c_pitch_class won't get
-        # assigned within the loop below, so we initialize it here to 0.
-        c_pitch_class = 0
-
-        while True:
-            if len(unnormalized_dict.items()) >= tet and (
-                forward or abs(accidental_n) > 3
-            ):
-                break
-
-            pitch_class = (counter * fifth) % tet
-
-            accidental_n = math.floor((3 + counter) / len(cls._alphabet))
-            accidental = utils.get_accidental(accidental_n, flat_sign=flat_sign)
-
-            letter = cls._alphabet[(3 + counter) % len(cls._alphabet)]
-
-            if letter + accidental == "c":
+    @functools.cached_property
+    def letter_dict(self):
+        letters = {}
+        c_pitch_class = None
+        for i in range(-2, 5):
+            if i > 3: # A hack to get F rather than F#, there must be a more elegant way
+                i -= 7
+            pitch_class = (i * self.fifth) % self.tet
+            if c_pitch_class is None:
                 c_pitch_class = pitch_class
+            pitch_class = (pitch_class - c_pitch_class) % self.tet
+            letter = self.alphabet[(3 + i) % len(self.alphabet)]
+            letters[letter] = pitch_class
+        return letters
 
-            if letter_format == "shell":
-                letter = letter.upper()
+    @functools.cached_property
+    def spell_dict(self):
+        self._init_spell_and_octave_dict()
+        return self._spell_dict
+    
+    @functools.cached_property
+    def octave_offsets(self):
+        self._init_spell_and_octave_dict()
+        return self._octave_offsets
 
-            if forward:
-                unnormalized_dict[pitch_class] = letter + accidental
-            else:
-                unnormalized_dict[letter + accidental] = pitch_class
-
-            if counter > 0:
-                counter = -counter
-            else:
-                counter = -counter + 1
-
-        if forward:
-            out = {
-                (k - c_pitch_class) % tet: v
-                for k, v in unnormalized_dict.items()
-            }
-        else:
-            out = {
-                k: (v - c_pitch_class) % tet
-                for k, v in unnormalized_dict.items()
-            }
-        spell_dict[tet] = out
-        return out
+    def _init_spell_and_octave_dict(self):
+        self._spell_dict = {}
+        self._octave_offsets = {}
+        for letter, letter_pc in self.letter_dict.items():
+            self._spell_dict[letter_pc] = letter
+            self._octave_offsets[letter_pc] = 0
+        for j in itertools.count():
+            i = j // 2
+            flat = j % 2
+            n_acc = i // 7 + 1
+            letter = self.alphabet[(-1 - (i % 7)) if flat else i % 7]
+            letter_pc = self.letter_dict[letter]
+            in_place_pc = letter_pc + (-1 if flat else 1) * n_acc * self.m2
+            pc = in_place_pc % self.tet
+            self._spell_dict[pc] = letter + n_acc * (self.flat_sign if flat else "#")
+            self._octave_offsets[pc] = -math.floor(in_place_pc / self.tet)
+            if len(self._spell_dict) == self.tet:
+                break

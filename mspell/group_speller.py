@@ -4,11 +4,12 @@ import numpy as np
 import math
 
 from . import utils
+from .spell_base import SpellBase
 
 from .utils import get_accidental
 
 
-class GroupSpeller:
+class GroupSpeller(SpellBase):
     """Finds the 'best' spelling for lists of pitch-classes.
 
     'Best' is defined as having both
@@ -31,6 +32,8 @@ class GroupSpeller:
         ValueError if gcd(tet, fifth) is not 1.
     """
 
+    _alphabet = "daebfcg"
+
     def __init__(
         self,
         tet: int = 12,
@@ -40,16 +43,13 @@ class GroupSpeller:
         self._tet = tet
         self._pitches = pitches
         self._letter_format = letter_format
-        self.fifth = utils.approximate_just_interval(3 / 2, tet)
-        if math.gcd(tet, self.fifth) != 1:
-            raise ValueError
         self._spelling_dict = self._build_fifth_class_spelling_dict()
         # Because of the modulo operation, it's hard to write an inverse
         # function that goes from pitch-class to fifth-class in an arbitrary
         # temperament, so instead we calculate the pitch-classes from the
         # fifth-classes and cache them:
         self._pc_to_fc_dict = {
-            (i + 2) * self.fifth % self._tet: i for i in range(self._tet)
+            (i + 2) * self.fifth % self.tet: i for i in range(self.tet)
         }
 
     def _build_fifth_class_spelling_dict(
@@ -57,14 +57,12 @@ class GroupSpeller:
         bounds: Tuple[int, int] = (-28, 28),
         forward: bool = True,
     ) -> Dict[int, str]:
-        flat_sign = "b" if self._letter_format == "shell" else "-"
-        alphabet = "DAEBFCG" if self._letter_format == "shell" else "daebfcg"
         len_alphabet = 7
         out = {}
         for fc in range(bounds[0], bounds[1] + 1):
-            letter = alphabet[fc % len_alphabet]
+            letter = self.alphabet[fc % len_alphabet]
             accidental = get_accidental(
-                math.floor((fc + 3) / len_alphabet), flat_sign=flat_sign
+                math.floor((fc + 3) / len_alphabet), flat_sign=self.flat_sign
             )
             if forward:
                 out[fc] = letter + accidental
@@ -81,7 +79,7 @@ class GroupSpeller:
             return []
         unique_pcs, inv_indices = np.unique(pcs, return_inverse=True)
         fcs = np.fromiter(
-            (self._pc_to_fc_dict[pc % self._tet] for pc in unique_pcs),
+            (self._pc_to_fc_dict[pc % self.tet] for pc in unique_pcs),
             dtype=unique_pcs.dtype,
         )
         indices = np.argsort(fcs)
@@ -89,17 +87,17 @@ class GroupSpeller:
         span = fcs[indices[-1]] - fcs[indices[0]]
         if span > 6:
             for i, j in zip(indices, indices[1:]):
-                newspan = (fcs[i] + self._tet) - fcs[j]
+                newspan = (fcs[i] + self.tet) - fcs[j]
                 if newspan < span:
                     lower_bound = fcs[j]
                     span = newspan
             if lower_bound is not None:
                 fcs = np.array(
-                    [fc + self._tet if fc < lower_bound else fc for fc in fcs]
+                    [fc + self.tet if fc < lower_bound else fc for fc in fcs]
                 )
         fcs_sum = fcs.sum()
         while True:
-            flat_fcs = fcs - self._tet
+            flat_fcs = fcs - self.tet
             flat_sum = abs(flat_fcs.sum())
             if flat_sum < fcs_sum:
                 fcs = flat_fcs
@@ -126,7 +124,7 @@ class GroupSpeller:
         """
 
         def _kern_octave(pitch, letter):
-            octave = pitch // self._tet - 5
+            octave = pitch // self.tet - 5
             if octave >= 0:
                 return letter * (octave + 1)
             return letter.upper() * (-octave)
@@ -145,14 +143,13 @@ class GroupSpeller:
         # that Cb or B# (or even Dbbb, etc.) appear in the correct octave. It
         # feels a little hacky, but it works.
         sharp_sign = "#"
-        flat_sign = "b" if self._letter_format == "shell" else "-"
         alterations = [
-            0 + pc.count(sharp_sign) - pc.count(flat_sign) for pc in pcs
+            0 + pc.count(sharp_sign) - pc.count(self.flat_sign) for pc in pcs
         ]
 
-        if self._letter_format == "shell":
+        if self.letter_format == "shell":
             out = [
-                pc + str((pitch - alteration) // self._tet - 1)
+                pc + str((pitch - alteration) // self.tet - 1)
                 for (pitch, pc, alteration) in zip(pitches, pcs, alterations)
             ]
         else:
