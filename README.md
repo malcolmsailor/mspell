@@ -14,6 +14,8 @@ Groupspeller
 
 numpy
 
+If Pandas or Pytorch are installed, supports spelling Series or Tensors respectively.
+
 # Example usage
 
 ```

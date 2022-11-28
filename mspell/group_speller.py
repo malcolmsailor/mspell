@@ -39,7 +39,13 @@ class GroupSpeller(SpellBase):
         tet: int = 12,
         pitches: bool = False,
         letter_format: str = "shell",
+        weighted: bool = True,
     ):
+        """
+        Keyword args:
+            weighted: weight fc-sum of spelling according to how frequently
+                pitches occur.
+        """
         self._tet = tet
         self._pitches = pitches
         self._letter_format = letter_format
@@ -51,6 +57,7 @@ class GroupSpeller(SpellBase):
         self._pc_to_fc_dict = {
             (i + 2) * self.fifth % self.tet: i for i in range(self.tet)
         }
+        self._weighted = weighted
 
     def _build_fifth_class_spelling_dict(
         self,
@@ -70,14 +77,21 @@ class GroupSpeller(SpellBase):
                 out[letter + accidental] = fc
         return out
 
-    def __call__(self, pcs: Sequence[int]) -> List[str]:
+    def __call__(self, pitches_or_pcs: Sequence[int]) -> List[str]:
+        if self._pitches:
+            return self.pitches(pitches_or_pcs)
+        return self.pcs(pitches_or_pcs)
+
+    def pcs(self, pcs: Sequence[int]) -> List[str]:
         """
         Args:
             pcs: sequence of ints.
         """
         if len(pcs) == 0:
             return []
-        unique_pcs, inv_indices = np.unique(pcs, return_inverse=True)
+        unique_pcs, inv_indices, counts = np.unique(
+            pcs, return_inverse=True, return_counts=True
+        )
         fcs = np.fromiter(
             (self._pc_to_fc_dict[pc % self.tet] for pc in unique_pcs),
             dtype=unique_pcs.dtype,
@@ -95,10 +109,16 @@ class GroupSpeller(SpellBase):
                 fcs = np.array(
                     [fc + self.tet if fc < lower_bound else fc for fc in fcs]
                 )
-        fcs_sum = fcs.sum()
+        if self._weighted:
+            fcs_sum = (fcs * counts).sum()
+        else:
+            fcs_sum = fcs.sum()
         while True:
             flat_fcs = fcs - self.tet
-            flat_sum = abs(flat_fcs.sum())
+            if self._weighted:
+                flat_sum = abs((flat_fcs * counts).sum())
+            else:
+                flat_sum = abs(flat_fcs.sum())
             if flat_sum < fcs_sum:
                 fcs = flat_fcs
                 fcs_sum = flat_sum
@@ -137,7 +157,7 @@ class GroupSpeller(SpellBase):
             for i in reversed(rest_indices):
                 pitches.pop(i)
 
-        pcs = self(pitches)
+        pcs = self.pcs([p % self.tet for p in pitches])
 
         # The next three lines (and the subtraction of alterations below) ensure
         # that Cb or B# (or even Dbbb, etc.) appear in the correct octave. It

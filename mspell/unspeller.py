@@ -51,8 +51,6 @@ class Unspeller(SingleSpellBase):
         elif letter_format == "kern":
             self._unspell = self._unspell_kern
 
-
-
     def _unspell_shell(self, item, pitches):
         if self._rests and item == "Rest":
             return None
@@ -106,7 +104,7 @@ class Unspeller(SingleSpellBase):
     def __call__(self, item, pitches=None):
         return self.unspelled(item, pitches=pitches)
 
-    @utils.nested_method()
+    @utils.nested_method(types_to_process=str)
     def unspelled(self, item, pitches=None):
         """Takes spelled pitch strings, returns integers.
 
