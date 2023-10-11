@@ -1,11 +1,10 @@
-from typing import Dict, List, Optional, Sequence, Tuple
-import numpy as np
-
 import math
+from typing import Dict, List, Optional, Sequence, Tuple
+
+import numpy as np
 
 from . import utils
 from .spell_base import SpellBase
-
 from .utils import get_accidental
 
 
@@ -151,9 +150,7 @@ class GroupSpeller(SpellBase):
 
         if rests is not None:
             pitches = list(pitches)
-            rest_indices = [
-                i for (i, pitch) in enumerate(pitches) if pitch is None
-            ]
+            rest_indices = [i for (i, pitch) in enumerate(pitches) if pitch is None]
             for i in reversed(rest_indices):
                 pitches.pop(i)
 
