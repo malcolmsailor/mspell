@@ -148,6 +148,7 @@ class GroupSpeller(SpellBase):
                 return letter * (octave + 1)
             return letter.upper() * (-octave)
 
+        rest_indices = None
         if rests is not None:
             pitches = list(pitches)
             rest_indices = [i for (i, pitch) in enumerate(pitches) if pitch is None]
@@ -166,15 +167,16 @@ class GroupSpeller(SpellBase):
 
         if self.letter_format == "shell":
             out = [
-                pc + str((pitch - alteration) // self.tet - 1)
+                pc + str((pitch - alteration) // self.tet - 1)  # type:ignore
                 for (pitch, pc, alteration) in zip(pitches, pcs, alterations)
             ]
         else:
             out = [
-                _kern_octave(pitch - alteration, pc[0]) + pc[1:]
+                _kern_octave(pitch - alteration, pc[0]) + pc[1:]  # type:ignore
                 for (pitch, pc, alteration) in zip(pitches, pcs, alterations)
             ]
         if rests is not None:
+            assert rest_indices is not None
             for i in rest_indices:
                 out.insert(i, rests)
         return out
